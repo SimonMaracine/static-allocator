@@ -28,3 +28,5 @@ int main() {
     std::list<MyObject2, allocator::StaticAllocator<MyObject2, MyObject2Storage>> obj2;
 }
 ```
+
+Define `ALLOCATOR_THROW_ON_FAILURE` in order to make the allocator throw a runtime exception on failure.

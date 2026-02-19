@@ -3,7 +3,6 @@
 #include <memory>
 #include <algorithm>
 #include <utility>
-#include <new>
 #include <cstddef>
 
 namespace allocator {
