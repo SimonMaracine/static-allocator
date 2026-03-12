@@ -22,7 +22,7 @@ struct MyObject2 {
 };
 
 int main() {
-    MyObject1* obj1 {new MyObject1};
+    MyObject1* obj1 = new MyObject1;
     delete obj1;
 
     std::list<MyObject2, allocator::StaticAllocator<MyObject2, MyObject2Storage>> obj2;
