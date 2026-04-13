@@ -11,14 +11,14 @@ Simply copy the header file and integrate it into your build system however you 
 #include "allocator.hpp"
 
 using MyObject1Storage = allocator::StaticAllocatorStorage<32, 8, 4>;
-using MyObject2Storage = allocator::StaticAllocatorStorage<64, 24, 8>;
+using MyObject2Storage = allocator::StaticAllocatorStorage<64, 24, 8, true>;
 
 struct MyObject1 : allocator::StaticAllocated<MyObject1, MyObject1Storage> {
-    int a, b;
+    int a {}, b {};
 };
 
 struct MyObject2 {
-    int a, b;
+    int a {}, b {};
 };
 
 int main() {
@@ -26,7 +26,6 @@ int main() {
     delete obj1;
 
     std::list<MyObject2, allocator::StaticAllocator<MyObject2, MyObject2Storage>> obj2;
+    obj2.emplace_back();
 }
 ```
-
-Define `ALLOCATOR_THROW_ON_FAILURE` in order to make the allocator throw a runtime exception on failure.
