@@ -14,11 +14,13 @@ using MyObject1Storage = allocator::StaticAllocatorStorage<32, 8, 4>;
 using MyObject2Storage = allocator::StaticAllocatorStorage<64, 24, 8, true>;
 
 struct MyObject1 : allocator::StaticAllocated<MyObject1, MyObject1Storage> {
-    int a {}, b {};
+    int a {};
+    int b {};
 };
 
 struct MyObject2 {
-    int a {}, b {};
+    int a {};
+    int b {};
 };
 
 int main() {
