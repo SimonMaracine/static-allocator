@@ -32,7 +32,7 @@ namespace allocator {
             BLOCK_ALIGNMENT == 8 ||
             BLOCK_ALIGNMENT == 16,
             "Invalid block alignment"
-        )
+        );
 
         alignas(BLOCK_ALIGNMENT) unsigned char m_base[STORAGE_SIZE * BLOCK_SIZE] {};
         bool m_blocks[STORAGE_SIZE] {};
