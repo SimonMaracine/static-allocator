@@ -1,16 +1,16 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <algorithm>
 #include <utility>
 #include <cstddef>
 
-namespace allocator {
-    template<std::size_t StorageSize, std::size_t BlockSize, std::size_t BlockAlignment, bool Throw = false>
+namespace static_allocator {
+    template<std::size_t StorageSize, std::size_t BlockSize, std::size_t BlockAlignment, bool ThreadSafe = true, bool Throw = true>
     class StaticAllocatorStorage {
-    private:
         static consteval std::size_t calculate_block_size() {
-            const auto quot = BlockSize / BlockAlignment;  // TODO __cpp_lib_constexpr_cmath is still undefined
+            const auto quot = BlockSize / BlockAlignment;
             const auto rem = BlockSize % BlockAlignment;
 
             if (rem == 0) {
@@ -23,6 +23,7 @@ namespace allocator {
         static constexpr auto STORAGE_SIZE = StorageSize;
         static constexpr auto BLOCK_SIZE = calculate_block_size();
         static constexpr auto BLOCK_ALIGNMENT = BlockAlignment;
+        static constexpr bool THREAD_SAFE = ThreadSafe;
         static constexpr bool THROW = Throw;
 
         static_assert(
@@ -37,6 +38,7 @@ namespace allocator {
         alignas(BLOCK_ALIGNMENT) unsigned char m_base[STORAGE_SIZE * BLOCK_SIZE] {};
         bool m_blocks[STORAGE_SIZE] {};
         std::size_t m_pointer {};
+        std::mutex m_mutex;
 
         static StaticAllocatorStorage& get() {
             static StaticAllocatorStorage instance;
@@ -45,7 +47,8 @@ namespace allocator {
     };
 
     template<typename T, typename Storage>
-    struct StaticAllocator {
+    class StaticAllocator {
+    public:
         using value_type = T;
         using size_type = std::size_t;
 
@@ -55,7 +58,27 @@ namespace allocator {
         value_type* allocate(size_type n) {
             auto& storage = Storage::get();
 
-            if (n > storage.STORAGE_SIZE) {
+            if constexpr (Storage::THREAD_SAFE) {
+                std::lock_guard guard {storage.m_mutex};
+                return allocate_unsafe(storage, n);
+            } else {
+                return allocate_unsafe(storage, n);
+            }
+        }
+
+        void deallocate(value_type* p, size_type n) {
+            auto& storage = Storage::get();
+
+            if constexpr (Storage::THREAD_SAFE) {
+                std::lock_guard guard {storage.m_mutex};
+                deallocate_unsafe(storage, p, n);
+            } else {
+                deallocate_unsafe(storage, p, n);
+            }
+        }
+    private:
+        static value_type* allocate_unsafe(Storage& storage, size_type n) {
+            if (n > Storage::STORAGE_SIZE) {
                 if constexpr (Storage::THROW) {
                     throw std::bad_alloc();
                 }
@@ -63,7 +86,7 @@ namespace allocator {
                 std::unreachable();
             }
 
-            for (size_type i = storage.m_pointer; i < storage.STORAGE_SIZE - n + 1; i++) {
+            for (size_type i = storage.m_pointer; i < Storage::STORAGE_SIZE - n + 1; i++) {
                 if (try_allocate(storage, i, n)) {
                     return reinterpret_cast<value_type*>(storage.m_base + Storage::BLOCK_SIZE * i);
                 }
@@ -82,15 +105,13 @@ namespace allocator {
             std::unreachable();
         }
 
-        void deallocate(value_type* p, size_type n) {
-            auto& storage = Storage::get();
-
+        static void deallocate_unsafe(Storage& storage, value_type* p, size_type n) {
             const auto block_pointer = reinterpret_cast<size_type>(p) - reinterpret_cast<size_type>(storage.m_base);
             const auto index = block_pointer / Storage::BLOCK_SIZE;
 
             std::for_each(storage.m_blocks + index, storage.m_blocks + index + n, [](bool& block) { block = false; });
         }
-    private:
+
         static bool try_allocate(Storage& storage, size_type i, size_type n) {
             if (std::all_of(storage.m_blocks + i, storage.m_blocks + i + n, [](const bool& block) { return !block; })) {
                 std::for_each(storage.m_blocks + i, storage.m_blocks + i + n, [](bool& block) { block = true; });
