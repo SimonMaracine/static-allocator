@@ -41,7 +41,7 @@ namespace static_allocator {
         std::mutex m_mutex;
 
         static StaticAllocatorStorage& get() {
-            static StaticAllocatorStorage instance;
+            static constinit StaticAllocatorStorage instance;
             return instance;
         }
     };
