@@ -38,7 +38,7 @@ namespace static_allocator {
         alignas(BLOCK_ALIGNMENT) unsigned char m_base[STORAGE_SIZE * BLOCK_SIZE] {};
         bool m_blocks[STORAGE_SIZE] {};
         std::size_t m_pointer {};
-        std::mutex m_mutex;
+        std::mutex m_mutex;  // FIXME
 
         static StaticAllocatorStorage& get() {
             static constinit StaticAllocatorStorage instance;
@@ -78,6 +78,14 @@ namespace static_allocator {
         }
     private:
         static value_type* allocate_unsafe(Storage& storage, size_type n) {
+            if (n == 0) {
+                if constexpr (Storage::THROW) {
+                    throw std::bad_alloc();
+                }
+
+                std::unreachable();
+            }
+
             if (n > Storage::STORAGE_SIZE) {
                 if constexpr (Storage::THROW) {
                     throw std::bad_alloc();
@@ -131,7 +139,7 @@ namespace static_allocator {
     bool operator!=(const StaticAllocator<T, Storage>&, const StaticAllocator<U, Storage>&) { return false; }
 
     template<typename T, typename Storage>
-    struct StaticAllocated {
+    struct StaticAllocated {  // FIXME
         void* operator new(std::size_t) {
             StaticAllocator<T, Storage> alloc;
             using Alloc = std::allocator_traits<decltype(alloc)>;
