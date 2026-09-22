@@ -8,7 +8,7 @@ Simply copy the header file and integrate it into your build system however you 
 ```cpp
 #include <list>
 
-#include "static_allocator.hpp"
+#include "static_allocator/static_allocator.hpp"
 
 using MyObject1Storage = static_allocator::StaticAllocatorStorage<32, 8, 4, false, false>;
 using MyObject2Storage = static_allocator::StaticAllocatorStorage<64, 24, 8>;
