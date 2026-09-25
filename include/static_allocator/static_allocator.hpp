@@ -4,24 +4,41 @@
 #include <mutex>
 #include <algorithm>
 #include <utility>
+#include <type_traits>
 #include <cstddef>
 
 namespace static_allocator {
-    template<std::size_t StorageSize, std::size_t BlockSize, std::size_t BlockAlignment, bool ThreadSafe = true, bool Throw = true>
-    class StaticAllocatorStorage {
-        static consteval std::size_t calculate_block_size() {
-            const auto quot = BlockSize / BlockAlignment;
-            const auto rem = BlockSize % BlockAlignment;
+    namespace detail {
+        static consteval std::size_t block_size(std::size_t size, std::size_t alignment) {
+            const auto quot = size / alignment;
+            const auto rem = size % alignment;
 
-            if (rem == 0) {
-                return BlockSize;
-            }
-
-            return (quot + 1) * BlockAlignment;
+            return rem == 0 ? size : (quot + 1) * alignment;
         }
-    public:
+
+        static constexpr std::size_t round_up(std::size_t x, std::size_t y) {
+            const auto quot = x / y;
+            const auto rem = x % y;
+
+            return rem == 0 ? quot : quot + 1;
+        }
+
+        template<bool, typename = void>
+        struct MutexStorage {};
+
+        template<bool ThreadSafe>
+        struct MutexStorage<ThreadSafe, std::enable_if_t<!ThreadSafe>> {};
+
+        template<bool ThreadSafe>
+        struct MutexStorage<ThreadSafe, std::enable_if_t<ThreadSafe>> {
+            std::mutex m_mutex;
+        };
+    }
+
+    template<std::size_t StorageSize, std::size_t BlockSize, std::size_t BlockAlignment, bool ThreadSafe = true, bool Throw = true>
+    struct StaticAllocatorStorage : detail::MutexStorage<ThreadSafe> {
         static constexpr auto STORAGE_SIZE = StorageSize;
-        static constexpr auto BLOCK_SIZE = calculate_block_size();
+        static constexpr auto BLOCK_SIZE = detail::block_size(BlockSize, BlockAlignment);
         static constexpr auto BLOCK_ALIGNMENT = BlockAlignment;
         static constexpr bool THREAD_SAFE = ThreadSafe;
         static constexpr bool THROW = Throw;
@@ -38,7 +55,6 @@ namespace static_allocator {
         alignas(BLOCK_ALIGNMENT) unsigned char m_base[STORAGE_SIZE * BLOCK_SIZE] {};
         bool m_blocks[STORAGE_SIZE] {};
         std::size_t m_pointer {};
-        std::mutex m_mutex;  // FIXME
 
         static StaticAllocatorStorage& get() {
             static constinit StaticAllocatorStorage instance;
@@ -139,19 +155,41 @@ namespace static_allocator {
     bool operator!=(const StaticAllocator<T, Storage>&, const StaticAllocator<U, Storage>&) { return false; }
 
     template<typename T, typename Storage>
-    struct StaticAllocated {  // FIXME
-        void* operator new(std::size_t) {
-            StaticAllocator<T, Storage> alloc;
+    struct StaticAllocated {
+        static_assert(sizeof(T) <= Storage::BLOCK_SIZE, "Type doesn't fit into the block size; increase the block size");
+        static_assert(alignof(T) <= Storage::BLOCK_ALIGNMENT, "Type has stricter alignment requirements than the block; increase the block alignment");
+        static_assert(Storage::BLOCK_ALIGNMENT >= __STDCPP_DEFAULT_NEW_ALIGNMENT__, "Block alignment doesn't respect operator new alignment requirements");
+
+        void* operator new(std::size_t size) {
+            StaticAllocator<unsigned char, Storage> alloc;
             using Alloc = std::allocator_traits<decltype(alloc)>;
 
-            return Alloc::allocate(alloc, 1);
+            const auto blocks = detail::round_up(size, Storage::BLOCK_SIZE);
+            return Alloc::allocate(alloc, blocks);
         }
 
-        void operator delete(void* ptr) {
-            StaticAllocator<T, Storage> alloc;
+        void operator delete(void* ptr, std::size_t size) noexcept {
+            StaticAllocator<unsigned char, Storage> alloc;
             using Alloc = std::allocator_traits<decltype(alloc)>;
 
-            Alloc::deallocate(alloc, static_cast<T*>(ptr), 1);
+            const auto blocks = detail::round_up(size, Storage::BLOCK_SIZE);
+            Alloc::deallocate(alloc, static_cast<T*>(ptr), blocks);
+        }
+
+        void* operator new[](std::size_t size) {
+            StaticAllocator<unsigned char, Storage> alloc;
+            using Alloc = std::allocator_traits<decltype(alloc)>;
+
+            const auto blocks = detail::round_up(size, Storage::BLOCK_SIZE);
+            return Alloc::allocate(alloc, blocks);
+        }
+
+        void operator delete[](void* ptr, std::size_t size) noexcept {
+            StaticAllocator<unsigned char, Storage> alloc;
+            using Alloc = std::allocator_traits<decltype(alloc)>;
+
+            const auto blocks = detail::round_up(size, Storage::BLOCK_SIZE);
+            Alloc::deallocate(alloc, static_cast<T*>(ptr), blocks);
         }
     };
 }
