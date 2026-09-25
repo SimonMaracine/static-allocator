@@ -155,12 +155,16 @@ namespace static_allocator {
     bool operator!=(const StaticAllocator<T, Storage>&, const StaticAllocator<U, Storage>&) { return false; }
 
     template<typename T, typename Storage>
-    struct StaticAllocated {
-        static_assert(sizeof(T) <= Storage::BLOCK_SIZE, "Type doesn't fit into the block size; increase the block size");
-        static_assert(alignof(T) <= Storage::BLOCK_ALIGNMENT, "Type has stricter alignment requirements than the block; increase the block alignment");
-        static_assert(Storage::BLOCK_ALIGNMENT >= __STDCPP_DEFAULT_NEW_ALIGNMENT__, "Block alignment doesn't respect operator new alignment requirements");
-
+    class StaticAllocated {
+        static consteval void check_requirements() {
+            static_assert(sizeof(T) <= Storage::BLOCK_SIZE, "Type doesn't fit into the block size; increase the block size");
+            static_assert(alignof(T) <= Storage::BLOCK_ALIGNMENT, "Type has stricter alignment requirements than the block; increase the block alignment");
+            static_assert(Storage::BLOCK_ALIGNMENT >= __STDCPP_DEFAULT_NEW_ALIGNMENT__, "Block alignment doesn't respect operator new alignment requirements");
+        }
+    public:
         void* operator new(std::size_t size) {
+            check_requirements();
+
             StaticAllocator<unsigned char, Storage> alloc;
             using Alloc = std::allocator_traits<decltype(alloc)>;
 
@@ -169,14 +173,18 @@ namespace static_allocator {
         }
 
         void operator delete(void* ptr, std::size_t size) noexcept {
+            check_requirements();
+
             StaticAllocator<unsigned char, Storage> alloc;
             using Alloc = std::allocator_traits<decltype(alloc)>;
 
             const auto blocks = detail::round_up(size, Storage::BLOCK_SIZE);
-            Alloc::deallocate(alloc, static_cast<T*>(ptr), blocks);
+            Alloc::deallocate(alloc, static_cast<unsigned char*>(ptr), blocks);
         }
 
         void* operator new[](std::size_t size) {
+            check_requirements();
+
             StaticAllocator<unsigned char, Storage> alloc;
             using Alloc = std::allocator_traits<decltype(alloc)>;
 
@@ -185,11 +193,13 @@ namespace static_allocator {
         }
 
         void operator delete[](void* ptr, std::size_t size) noexcept {
+            check_requirements();
+
             StaticAllocator<unsigned char, Storage> alloc;
             using Alloc = std::allocator_traits<decltype(alloc)>;
 
             const auto blocks = detail::round_up(size, Storage::BLOCK_SIZE);
-            Alloc::deallocate(alloc, static_cast<T*>(ptr), blocks);
+            Alloc::deallocate(alloc, static_cast<unsigned char*>(ptr), blocks);
         }
     };
 }
