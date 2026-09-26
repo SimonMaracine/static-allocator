@@ -16,7 +16,7 @@ namespace static_allocator {
             return rem == 0 ? size : (quot + 1) * alignment;
         }
 
-        static constexpr std::size_t round_up(std::size_t x, std::size_t y) {
+        static constexpr std::size_t div_round_up(std::size_t x, std::size_t y) {
             const auto quot = x / y;
             const auto rem = x % y;
 
@@ -35,6 +35,8 @@ namespace static_allocator {
         };
     }
 
+    // Memory storage for the allocator
+    // Different allocators can thus share the same storage
     template<std::size_t StorageSize, std::size_t BlockSize, std::size_t BlockAlignment, bool ThreadSafe = true, bool Throw = true>
     struct StaticAllocatorStorage : detail::MutexStorage<ThreadSafe> {
         static constexpr auto STORAGE_SIZE = StorageSize;
@@ -62,6 +64,7 @@ namespace static_allocator {
         }
     };
 
+    // Allocator interface similar to the standard one
     template<typename T, typename Storage>
     class StaticAllocator {
     public:
@@ -94,15 +97,7 @@ namespace static_allocator {
         }
     private:
         static value_type* allocate_unsafe(Storage& storage, size_type n) {
-            if (n == 0) {
-                if constexpr (Storage::THROW) {
-                    throw std::bad_alloc();
-                }
-
-                std::unreachable();
-            }
-
-            if (n > Storage::STORAGE_SIZE) {
+            if (n == 0 || n > Storage::STORAGE_SIZE) {
                 if constexpr (Storage::THROW) {
                     throw std::bad_alloc();
                 }
@@ -154,21 +149,16 @@ namespace static_allocator {
     template<typename T, typename U, typename Storage>
     bool operator!=(const StaticAllocator<T, Storage>&, const StaticAllocator<U, Storage>&) { return false; }
 
+    // A different interface than the allocator, a helper class used to override operator new and operator delete for a specific type
     template<typename T, typename Storage>
-    class StaticAllocated {
-        static consteval void check_requirements() {
-            static_assert(sizeof(T) <= Storage::BLOCK_SIZE, "Type doesn't fit into the block size; increase the block size");
-            static_assert(alignof(T) <= Storage::BLOCK_ALIGNMENT, "Type has stricter alignment requirements than the block; increase the block alignment");
-            static_assert(Storage::BLOCK_ALIGNMENT >= __STDCPP_DEFAULT_NEW_ALIGNMENT__, "Block alignment doesn't respect operator new alignment requirements");
-        }
-    public:
+    struct StaticAllocated {
         void* operator new(std::size_t size) {
             check_requirements();
 
             StaticAllocator<unsigned char, Storage> alloc;
             using Alloc = std::allocator_traits<decltype(alloc)>;
 
-            const auto blocks = detail::round_up(size, Storage::BLOCK_SIZE);
+            const auto blocks = detail::div_round_up(size, Storage::BLOCK_SIZE);
             return Alloc::allocate(alloc, blocks);
         }
 
@@ -178,7 +168,7 @@ namespace static_allocator {
             StaticAllocator<unsigned char, Storage> alloc;
             using Alloc = std::allocator_traits<decltype(alloc)>;
 
-            const auto blocks = detail::round_up(size, Storage::BLOCK_SIZE);
+            const auto blocks = detail::div_round_up(size, Storage::BLOCK_SIZE);
             Alloc::deallocate(alloc, static_cast<unsigned char*>(ptr), blocks);
         }
 
@@ -188,7 +178,7 @@ namespace static_allocator {
             StaticAllocator<unsigned char, Storage> alloc;
             using Alloc = std::allocator_traits<decltype(alloc)>;
 
-            const auto blocks = detail::round_up(size, Storage::BLOCK_SIZE);
+            const auto blocks = detail::div_round_up(size, Storage::BLOCK_SIZE);
             return Alloc::allocate(alloc, blocks);
         }
 
@@ -198,8 +188,14 @@ namespace static_allocator {
             StaticAllocator<unsigned char, Storage> alloc;
             using Alloc = std::allocator_traits<decltype(alloc)>;
 
-            const auto blocks = detail::round_up(size, Storage::BLOCK_SIZE);
+            const auto blocks = detail::div_round_up(size, Storage::BLOCK_SIZE);
             Alloc::deallocate(alloc, static_cast<unsigned char*>(ptr), blocks);
+        }
+    private:
+        static consteval void check_requirements() {
+            static_assert(sizeof(T) <= Storage::BLOCK_SIZE, "Type doesn't fit into the block size; increase the block size");
+            static_assert(alignof(T) <= Storage::BLOCK_ALIGNMENT, "Type has stricter alignment requirements than the block; increase the block alignment");
+            static_assert(Storage::BLOCK_ALIGNMENT >= __STDCPP_DEFAULT_NEW_ALIGNMENT__, "Block alignment doesn't respect operator new alignment requirements");
         }
     };
 }
