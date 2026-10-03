@@ -9,14 +9,14 @@
 
 namespace static_allocator {
     namespace detail {
-        static consteval std::size_t block_size(std::size_t size, std::size_t alignment) {
+        consteval std::size_t block_size(std::size_t size, std::size_t alignment) {
             const auto quot = size / alignment;
             const auto rem = size % alignment;
 
             return rem == 0 ? size : (quot + 1) * alignment;
         }
 
-        static constexpr std::size_t div_round_up(std::size_t x, std::size_t y) {
+        constexpr std::size_t div_round_up(std::size_t x, std::size_t y) {
             const auto quot = x / y;
             const auto rem = x % y;
 
