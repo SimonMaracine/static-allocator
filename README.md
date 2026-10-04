@@ -10,8 +10,8 @@ Simply copy the header file and integrate it into your build system however you 
 
 #include "static_allocator/static_allocator.hpp"
 
-using MyObject1Storage = static_allocator::StaticAllocatorStorage<32, 8, 16, false, false>;
-using MyObject2Storage = static_allocator::StaticAllocatorStorage<64, 24, 8>;
+using MyObject1Storage = static_allocator::AllocatorStorage<32, 8, 16, false, false>;
+using MyObject2Storage = static_allocator::AllocatorStorage<64, 24, 8>;
 
 struct MyObject1 : static_allocator::StaticAllocated<MyObject1, MyObject1Storage> {
     int a {};

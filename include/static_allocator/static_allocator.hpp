@@ -38,7 +38,7 @@ namespace static_allocator {
     // Memory storage for the allocator
     // Different allocators can thus share the same storage
     template<std::size_t StorageSize, std::size_t BlockSize, std::size_t BlockAlignment, bool ThreadSafe = true, bool Throw = true>
-    struct StaticAllocatorStorage : detail::MutexStorage<ThreadSafe> {
+    struct AllocatorStorage : detail::MutexStorage<ThreadSafe> {
         static constexpr auto STORAGE_SIZE = StorageSize;
         static constexpr auto BLOCK_SIZE = detail::block_size(BlockSize, BlockAlignment);
         static constexpr auto BLOCK_ALIGNMENT = BlockAlignment;
@@ -58,8 +58,8 @@ namespace static_allocator {
         bool m_blocks[STORAGE_SIZE] {};
         std::size_t m_pointer {};
 
-        static StaticAllocatorStorage& get() {
-            static constinit StaticAllocatorStorage instance;
+        static AllocatorStorage& get() {
+            static constinit AllocatorStorage instance;
             return instance;
         }
     };
